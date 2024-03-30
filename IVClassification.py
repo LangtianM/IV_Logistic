@@ -5,6 +5,7 @@ import seaborn as sns
 import numpy as np
 from scipy.special import expit
 from scipy.special import logit
+from scipy.optimize import root 
 
 class sim_data:
     def __init__(self, n, sigma_z=1, sigma_u=1, sigma_e=0.01, 
@@ -78,3 +79,50 @@ class three_stage_logit(IVModel):
         lm_X_hat.fit(self.X_hat.reshape(-1, 1), self.g_p_hat)
         self.coef_ = lm_X_hat.coef_
         self.intercept_ = lm_X_hat.intercept_
+
+class GMM_logit(IVModel):
+    
+    def __init__(self) -> None:
+        super().__init__()
+        self.X_hat = None
+
+    def fit(self, X, Y, Z):
+        lm_Z_X = LinearRegression()
+        lm_Z_X.fit(Z.reshape(-1, 1), X)
+        self.X_hat = lm_Z_X.predict(Z.reshape(-1, 1))
+        
+        def eq(beta):
+            residuals = Y - expit(beta[0] + beta[1] * X)
+            f = [np.mean(residuals), 
+                 np.mean(residuals * self.X_hat)]
+            
+            #direvative of logistic function
+            dls = expit(beta[0]+ beta[1]*X) * (1 - expit(beta[0]+ beta[1]*X))
+            
+            #Jacobian of f
+            J = [[-np.mean(dls), -np.mean(dls * X)],
+                 [-np.mean(dls * self.X_hat), -np.mean(dls * self.X_hat * X)]]
+            
+            return f, J
+        
+        beta = root(eq, [0, 0], jac=True).x
+        self.coef_ = beta[1]
+        self.intercept_ = beta[0]
+        return beta[1]
+        
+    def fit_with_bootstrap(self, X, Y, Z, n_bootstrap=1000):
+        coefs = []
+        for _ in range(n_bootstrap):
+            indices = np.random.choice(len(X), len(X), replace=True)
+            X_bootstrap = X[indices]
+            Y_bootstrap = Y[indices]
+            Z_bootstrap = Z[indices]
+            
+            self.fit(X_bootstrap, Y_bootstrap, Z_bootstrap)
+            coefs.append(self.coef_)
+        
+        coefs = np.array(coefs)
+        self.coef_bootstrap_mean = np.mean(coefs)
+        self.coef_bootstrap_std = np.std(coefs)
+        self.coef_bootstrap_ci = np.percentile(coefs, [2.5, 97.5])
+            
