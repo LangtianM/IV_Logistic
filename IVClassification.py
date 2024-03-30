@@ -3,7 +3,8 @@ from sklearn.linear_model import LogisticRegression
 from xgboost import XGBClassifier
 import seaborn as sns
 import numpy as np
-
+from scipy.special import expit
+from scipy.special import logit
 
 class sim_data:
     def __init__(self, n, sigma_z=1, sigma_u=1, sigma_e=0.01, 
@@ -14,7 +15,7 @@ class sim_data:
         epsilon = np.random.normal(0, sigma_e, n)
         self.X = alpha * self.Z + gamma * self.U + epsilon
         self.g_p = beta * self.X + eta * self.U
-        self.p = 1 / (1 + np.exp(-self.g_p))
+        self.p = expit(self.g_p)  # Replaced custom logistic function with expit
         self.Y = np.random.binomial(1, self.p)
         
     def plot_Z_X(self):
@@ -55,8 +56,7 @@ class two_stage_logit(IVModel):
         
     def predict(self, X):
         return self.ypredictor.predict(X.reshape(-1, 1))
-    
-    
+        
 class three_stage_logit(IVModel):
     
     def __init__(self, classifier=XGBClassifier(), regressor = LinearRegression()):
@@ -65,14 +65,11 @@ class three_stage_logit(IVModel):
         self.classifier = classifier
         self.regressor = regressor
     
-    def logit(self, p):
-        return np.log( p / (1 - p) )
-    
     def fit(self, X, Y, Z):
         self.classifier.fit(X.reshape(-1, 1), Y)
         E_Y_X = self.classifier.predict_proba(X.reshape(-1, 1))[:, 1]
         
-        self.g_p_hat = self.logit(E_Y_X)
+        self.g_p_hat = logit(E_Y_X)  # Replaced custom logistic function with np.log
         
         lm_Z_X = LinearRegression()
         lm_Z_X.fit(Z.reshape(-1, 1), X)
