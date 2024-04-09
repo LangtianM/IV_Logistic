@@ -7,6 +7,7 @@ from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression
 from sklearn.feature_selection import RFECV
 
+# git ignore
 class SIV():
     """
     The SIV class represents the method of Synthetic Instrumental Variables.
