@@ -10,12 +10,17 @@ from sklearn.preprocessing import StandardScaler
 
 class sim_data:
     def __init__(self, n, sigma_z=1, sigma_u=1, sigma_e=0.01, 
-                 alpha=1, beta=1, gamma=1, eta = 1):
+                 alpha=1, beta=1, gamma=1, eta = 1, scaled_X = True):
         super().__init__()
         self.Z = np.random.normal(0, sigma_z, n)
         self.U = np.random.normal(0, sigma_u, n)
         epsilon = np.random.normal(0, sigma_e, n)
-        self.X = alpha * self.Z + gamma * self.U + epsilon
+        
+        if scaled_X:
+            self.X = alpha/(alpha+gamma) * self.Z + gamma/(alpha+gamma) * self.U + epsilon
+        else:
+            self.X = alpha * self.Z + gamma * self.U + epsilon
+        
         self.g_p = beta * self.X + eta * self.U
         self.p = expit(self.g_p)  # Replaced custom logistic function with expit
         self.Y = np.random.binomial(1, self.p)
