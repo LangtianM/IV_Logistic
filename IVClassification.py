@@ -6,6 +6,7 @@ import numpy as np
 from scipy.special import expit
 from scipy.special import logit
 from scipy.optimize import root 
+from sklearn.preprocessing import StandardScaler
 
 class sim_data:
     def __init__(self, n, sigma_z=1, sigma_u=1, sigma_e=0.01, 
@@ -27,6 +28,9 @@ class sim_data:
         
     def plot_p(self):
         sns.histplot(self.p)
+        
+    def set_Z(self, Z):
+        self.Z = Z
 
 
 class IVModel:
@@ -57,6 +61,31 @@ class two_stage_logit(IVModel):
         
     def predict(self, X):
         return self.ypredictor.predict(X.reshape(-1, 1))
+    
+class residual_logit(IVModel):
+    def __init__(self) -> None:
+        super().__init__()
+        
+    def fit(self, X, Y, Z):
+        lm_Z_X = LinearRegression()
+        lm_Z_X.fit(Z.reshape(-1, 1), X)
+        self.lm_Z_X = lm_Z_X
+        X_hat = lm_Z_X.predict(Z.reshape(-1, 1))
+        residuals = Y - X_hat
+        X_tilde = np.concatenate([X.reshape(-1, 1), 
+                                  residuals.reshape(-1, 1)], axis=1)
+        lg = LogisticRegression()
+        lg.fit(X_tilde, Y)
+        self.ypredictor = lg
+        self.coef_ = lg.coef_
+        self.beta = lg.coef_[0][0]
+        self.intercept_ = lg.intercept_
+        
+    def predict(self, X):
+        residuals = X - self.lm_Z_X.predict(X.reshape(-1, 1))
+        X_tilde = np.concatenate([X.reshape(-1, 1), 
+                                  residuals.reshape(-1, 1)], axis=1)
+        return self.ypredictor.predict(X_tilde)
         
 class three_stage_logit(IVModel):
     
@@ -85,8 +114,13 @@ class GMM_logit(IVModel):
     def __init__(self) -> None:
         super().__init__()
         self.X_hat = None
+        self.scaler = StandardScaler()
 
     def fit(self, X, Y, Z):
+        
+        # Z = self.scaler.fit_transform(Z.reshape(-1, 1))
+        # X = self.scaler.fit_transform(X.reshape(-1, 1))
+
         lm_Z_X = LinearRegression()
         lm_Z_X.fit(Z.reshape(-1, 1), X)
         self.X_hat = lm_Z_X.predict(Z.reshape(-1, 1))
