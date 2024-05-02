@@ -102,6 +102,37 @@ class two_stage_logit(IVModel):
     def predict(self, X):
         return self.ypredictor.predict(X.reshape(-1, 1))
     
+class Multivar_TSLS():
+    """
+    self.coef is ordered coefficient of X, V, W
+    """
+    def __init__(self):
+        pass
+    
+    def fit(self, X, Y, Z, V, W=None):
+        if W == None:
+            Z_X_lm = LinearRegression().fit(Z, X)
+            X_hat = Z_X_lm.predict(Z)
+            
+            adj_features = np.concatenate([X_hat, V], axis=1)
+            lg = LogisticRegression().fit(adj_features, np.array(Y).ravel())
+            
+            self.coef = lg.coef_
+            self.intercept = lg.intercept_
+            self.causal_effect = lg.coef_[0][0]
+        else:
+            X_parents = np.concatenate([Z, W], axis=1)
+            Z_X_lm = LinearRegression().fit(X_parents, X)
+            X_hat = Z_X_lm.predict(Z)
+            
+            adj_features = np.concatenate([X_hat, V, W], axis=1)
+            lg = LogisticRegression().fit(adj_features, np.array(Y).ravel())
+            
+            self.coef = lg.coef_
+            self.intercept = lg.intercept_
+            self.causal_effect = lg.coef_[0][0]
+
+            
 class residual_logit(IVModel):
     def __init__(self) -> None:
         super().__init__()
@@ -127,6 +158,34 @@ class residual_logit(IVModel):
                                   residuals.reshape(-1, 1)], axis=1)
         return self.ypredictor.predict(X_tilde)
         
+class ResIV():
+    def __init__(self) -> None:
+        pass
+
+    def fit(self, X, Y, Z, V, W=None):
+        if W == None:
+            Z_X_lm = LinearRegression().fit(Z, X)
+            X_hat = Z_X_lm.predict(Z)
+            U_hat = X - X_hat
+            adj_features = np.concatenate([X_hat, U_hat, V], axis=1)
+            
+            lg = LogisticRegression().fit(adj_features, np.array(Y).ravel())
+            self.coef = lg.coef_
+            self.intercept = lg.intercept_
+            self.causal_effect = lg.coef_[0][0]
+        else:
+            X_parents = np.concatenate([Z, W], axis=1)
+            Z_X_lm = LinearRegression().fit(X_parents, X)
+            X_hat = Z_X_lm.predict(Z)
+            U_hat = X - X_hat
+            adj_features = np.concatenate([X_hat, U_hat, V, W], axis=1)
+            
+            lg = LogisticRegression().fit(adj_features, np.array(Y).ravel())
+            self.coef = lg.coef_
+            self.intercept = lg.intercept_
+            self.causal_effect = lg.coef_[0][0]
+            
+
 class three_stage_logit(IVModel):
     
     def __init__(self, classifier=XGBClassifier(), regressor = LinearRegression()):
@@ -184,19 +243,61 @@ class GMM_logit(IVModel):
         self.intercept_ = beta[0]
         return beta[1]
         
-    def fit_with_bootstrap(self, X, Y, Z, n_bootstrap=1000):
-        coefs = []
-        for _ in range(n_bootstrap):
-            indices = np.random.choice(len(X), len(X), replace=True)
-            X_bootstrap = X[indices]
-            Y_bootstrap = Y[indices]
-            Z_bootstrap = Z[indices]
-            
-            self.fit(X_bootstrap, Y_bootstrap, Z_bootstrap)
-            coefs.append(self.coef_)
+class Multivar_GMM():
+    def __init__(self):
+        pass
+    
+    def fit(self, X, Y, Z, V, W=None):
+        X = np.array(X).reshape(-1, 1)
+        Y = np.array(Y).reshape(-1, 1)
+        V = np.array(V)
         
-        coefs = np.array(coefs)
-        self.coef_bootstrap_mean = np.mean(coefs)
-        self.coef_bootstrap_std = np.std(coefs)
-        self.coef_bootstrap_ci = np.percentile(coefs, [2.5, 97.5])
+        if W == None:
+            Z_X_lm = LinearRegression().fit(Z, X)
+            X_hat = Z_X_lm.predict(Z).reshape(-1, 1)
+            residuals = X - X_hat
+            features = np.concatenate([np.ones(len(X)).reshape(-1, 1), X, V], axis=1)
+            p = features.shape[1]
             
+            def eq(beta):
+                
+                beta = beta.reshape(-1, 1)
+                # beta should be a p*1 vector
+                # print('Beta:', beta.shape)
+                # print('Features:', features.shape)
+                
+                y_hat = expit(features @ beta)
+                
+                # print('y_hat:', y_hat.shape)
+                # print('Y:', Y.shape)
+                
+                residuals = Y - y_hat
+                
+                # print('Residuals:', residuals.shape)
+                # print('X_hat:', X_hat.shape)
+                
+                f_1 = np.array([np.mean(residuals), 
+                              np.mean(residuals * X_hat)]).reshape(-1, 1)
+                
+                # print('V:', V.shape)
+                # print(np.mean(residuals * V, axis=0))
+
+                f_2 = np.mean(residuals * V, axis=0).reshape(-1, 1)
+         
+                f = np.concatenate((f_1, f_2)).reshape(-1)
+                
+                # #direvative of logistic function
+                # dls = expit(beta[0]+ beta[1]*X) * (1 - expit(beta[0]+ beta[1]*X))
+                
+                # #Jacobian of f
+                # J = [[-np.mean(dls), -np.mean(dls * X)],
+                #      [-np.mean(dls * self.X_hat), -np.mean(dls * self.X_hat * X)]]
+                
+                return f
+            
+            beta = root(eq, np.random.normal(size=p).reshape(-1, 1)).x
+            self.coef = beta
+            self.intercept = beta[0]
+            self.causal_effect = beta[1]
+        else:
+            raise NotImplementedError
