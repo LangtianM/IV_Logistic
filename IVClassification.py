@@ -117,8 +117,10 @@ class Multivar_TSLS():
             adj_features = np.concatenate([X_hat, V], axis=1)
             lg = LogisticRegression().fit(adj_features, np.array(Y).ravel())
             
-            self.coef = lg.coef_
-            self.intercept = lg.intercept_
+            self.coef = np.concatenate([lg.intercept_.reshape(1, -1), 
+                                        lg.coef_.reshape(1, -1)], axis=1)
+            # self.coef = lg.coef_
+            # self.intercept = lg.intercept_
             self.causal_effect = lg.coef_[0][0]
         else:
             X_parents = np.concatenate([Z, W], axis=1)
@@ -128,8 +130,9 @@ class Multivar_TSLS():
             adj_features = np.concatenate([X_hat, V, W], axis=1)
             lg = LogisticRegression().fit(adj_features, np.array(Y).ravel())
             
-            self.coef = lg.coef_
-            self.intercept = lg.intercept_
+            self.coef = np.concatenate([lg.intercept_.reshape(1, -1), lg.coef_.reshape(1, -1)], axis=1)
+            # self.coef = lg.coef_
+            # self.intercept = lg.intercept_
             self.causal_effect = lg.coef_[0][0]
 
             
@@ -170,8 +173,10 @@ class ResIV():
             adj_features = np.concatenate([X_hat, U_hat, V], axis=1)
             
             lg = LogisticRegression().fit(adj_features, np.array(Y).ravel())
-            self.coef = lg.coef_
-            self.intercept = lg.intercept_
+            
+            self.coef = np.concatenate([lg.intercept_.reshape(1, -1), 
+                                        lg.coef_.reshape(1, -1)], axis=1)
+            # self.intercept = lg.intercept_
             self.causal_effect = lg.coef_[0][0]
         else:
             X_parents = np.concatenate([Z, W], axis=1)
@@ -181,8 +186,10 @@ class ResIV():
             adj_features = np.concatenate([X_hat, U_hat, V, W], axis=1)
             
             lg = LogisticRegression().fit(adj_features, np.array(Y).ravel())
-            self.coef = lg.coef_
-            self.intercept = lg.intercept_
+            
+            self.coef = np.concatenate([lg.intercept_.reshape(1, -1), 
+                                        lg.coef_.reshape(1, -1)], axis=1)
+            # self.intercept = lg.intercept_
             self.causal_effect = lg.coef_[0][0]
             
 
@@ -296,8 +303,8 @@ class Multivar_GMM():
                 return f
             
             beta = root(eq, np.random.normal(size=p).reshape(-1, 1)).x
-            self.coef = beta
-            self.intercept = beta[0]
+            self.coef = beta.reshape(1, -1)
+            # self.intercept = beta[0]
             self.causal_effect = beta[1]
         else:
             raise NotImplementedError
